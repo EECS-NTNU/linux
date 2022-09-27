@@ -10,10 +10,12 @@
  *  Copyright (C) 2013 Texas Instruments
  *  Copyright (C) 2013 Eduardo Valentin <eduardo.valentin@ti.com>
  */
-#include <linux/hwmon.h>
-#include <linux/thermal.h>
-#include <linux/slab.h>
 #include <linux/err.h>
+#include <linux/export.h>
+#include <linux/hwmon.h>
+#include <linux/slab.h>
+#include <linux/thermal.h>
+
 #include "thermal_hwmon.h"
 
 /* hwmon sys I/F */
@@ -147,8 +149,8 @@ int thermal_add_hwmon_sysfs(struct thermal_zone_device *tz)
 	INIT_LIST_HEAD(&hwmon->tz_list);
 	strlcpy(hwmon->type, tz->type, THERMAL_NAME_LENGTH);
 	strreplace(hwmon->type, '-', '_');
-	hwmon->device = hwmon_device_register_with_info(&tz->device, hwmon->type,
-							hwmon, NULL, NULL);
+	hwmon->device = hwmon_device_register_for_thermal(&tz->device,
+							  hwmon->type, hwmon);
 	if (IS_ERR(hwmon->device)) {
 		result = PTR_ERR(hwmon->device);
 		goto free_mem;
@@ -204,8 +206,7 @@ int thermal_add_hwmon_sysfs(struct thermal_zone_device *tz)
 	if (new_hwmon_device)
 		hwmon_device_unregister(hwmon->device);
  free_mem:
-	if (new_hwmon_device)
-		kfree(hwmon);
+	kfree(hwmon);
 
 	return result;
 }
@@ -276,3 +277,5 @@ int devm_thermal_add_hwmon_sysfs(struct thermal_zone_device *tz)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(devm_thermal_add_hwmon_sysfs);
+
+MODULE_IMPORT_NS(HWMON_THERMAL);

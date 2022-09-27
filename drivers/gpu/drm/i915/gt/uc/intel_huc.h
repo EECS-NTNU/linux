@@ -6,7 +6,7 @@
 #ifndef _INTEL_HUC_H_
 #define _INTEL_HUC_H_
 
-#include "i915_reg.h"
+#include "i915_reg_defs.h"
 #include "intel_uc_fw.h"
 #include "intel_huc_fw.h"
 
@@ -15,8 +15,6 @@ struct intel_huc {
 	struct intel_uc_fw fw;
 
 	/* HuC-specific additions */
-	struct i915_vma *rsa_data;
-
 	struct {
 		i915_reg_t reg;
 		u32 mask;
@@ -56,5 +54,7 @@ static inline bool intel_huc_is_authenticated(struct intel_huc *huc)
 {
 	return intel_uc_fw_is_running(&huc->fw);
 }
+
+void intel_huc_load_status(struct intel_huc *huc, struct drm_printer *p);
 
 #endif

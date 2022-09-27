@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * fs/verity/verify.c: data verification functions, i.e. hooks for ->readpages()
+ * Data verification functions, i.e. hooks for ->readahead()
  *
  * Copyright 2019 Google LLC
  */
@@ -179,6 +179,7 @@ out:
 
 /**
  * fsverity_verify_page() - verify a data page
+ * @page: the page to verity
  *
  * Verify a page that has just been read from a verity file.  The page must be a
  * pagecache page that is still locked and not yet uptodate.
@@ -206,13 +207,14 @@ EXPORT_SYMBOL_GPL(fsverity_verify_page);
 #ifdef CONFIG_BLOCK
 /**
  * fsverity_verify_bio() - verify a 'read' bio that has just completed
+ * @bio: the bio to verify
  *
  * Verify a set of pages that have just been read from a verity file.  The pages
  * must be pagecache pages that are still locked and not yet uptodate.  Pages
  * that fail verification are set to the Error state.  Verification is skipped
  * for pages already in the Error state, e.g. due to fscrypt decryption failure.
  *
- * This is a helper function for use by the ->readpages() method of filesystems
+ * This is a helper function for use by the ->readahead() method of filesystems
  * that issue bios to read data directly into the page cache.  Filesystems that
  * populate the page cache without issuing bios (e.g. non block-based
  * filesystems) must instead call fsverity_verify_page() directly on each page.
@@ -264,6 +266,7 @@ EXPORT_SYMBOL_GPL(fsverity_verify_bio);
 
 /**
  * fsverity_enqueue_verify_work() - enqueue work on the fs-verity workqueue
+ * @work: the work to enqueue
  *
  * Enqueue verification work for asynchronous processing.
  */

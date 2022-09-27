@@ -65,6 +65,28 @@ static const struct proto_ops rose_proto_ops;
 ax25_address rose_callsign;
 
 /*
+ * ROSE network devices are virtual network devices encapsulating ROSE
+ * frames into AX.25 which will be sent through an AX.25 device, so form a
+ * special "super class" of normal net devices; split their locks off into a
+ * separate class since they always nest.
+ */
+static struct lock_class_key rose_netdev_xmit_lock_key;
+static struct lock_class_key rose_netdev_addr_lock_key;
+
+static void rose_set_lockdep_one(struct net_device *dev,
+				 struct netdev_queue *txq,
+				 void *_unused)
+{
+	lockdep_set_class(&txq->_xmit_lock, &rose_netdev_xmit_lock_key);
+}
+
+static void rose_set_lockdep_key(struct net_device *dev)
+{
+	lockdep_set_class(&dev->addr_list_lock, &rose_netdev_addr_lock_key);
+	netdev_for_each_tx_queue(dev, rose_set_lockdep_one, NULL);
+}
+
+/*
  *	Convert a ROSE address into text.
  */
 char *rose2asc(char *buf, const rose_address *addr)
@@ -87,7 +109,7 @@ char *rose2asc(char *buf, const rose_address *addr)
 /*
  *	Compare two ROSE addresses, 0 == equal.
  */
-int rosecmp(rose_address *addr1, rose_address *addr2)
+int rosecmp(const rose_address *addr1, const rose_address *addr2)
 {
 	int i;
 
@@ -101,7 +123,8 @@ int rosecmp(rose_address *addr1, rose_address *addr2)
 /*
  *	Compare two ROSE addresses for only mask digits, 0 == equal.
  */
-int rosecmpm(rose_address *addr1, rose_address *addr2, unsigned short mask)
+int rosecmpm(const rose_address *addr1, const rose_address *addr2,
+	     unsigned short mask)
 {
 	unsigned int i, j;
 
@@ -343,7 +366,7 @@ void rose_destroy_socket(struct sock *sk)
  */
 
 static int rose_setsockopt(struct socket *sock, int level, int optname,
-	char __user *optval, unsigned int optlen)
+		sockptr_t optval, unsigned int optlen)
 {
 	struct sock *sk = sock->sk;
 	struct rose_sock *rose = rose_sk(sk);
@@ -355,7 +378,7 @@ static int rose_setsockopt(struct socket *sock, int level, int optname,
 	if (optlen < sizeof(int))
 		return -EINVAL;
 
-	if (get_user(opt, (int __user *)optval))
+	if (copy_from_sockptr(&opt, optval, sizeof(int)))
 		return -EFAULT;
 
 	switch (optname) {
@@ -1207,7 +1230,8 @@ static int rose_recvmsg(struct socket *sock, struct msghdr *msg, size_t size,
 		return -ENOTCONN;
 
 	/* Now we can treat all alike */
-	if ((skb = skb_recv_datagram(sk, flags & ~MSG_DONTWAIT, flags & MSG_DONTWAIT, &er)) == NULL)
+	skb = skb_recv_datagram(sk, flags, &er);
+	if (!skb)
 		return er;
 
 	qbit = (skb->data[0] & ROSE_Q_BIT) == ROSE_Q_BIT;
@@ -1511,6 +1535,7 @@ static int __init rose_proto_init(void)
 			free_netdev(dev);
 			goto fail;
 		}
+		rose_set_lockdep_key(dev);
 		dev_rose[i] = dev;
 	}
 

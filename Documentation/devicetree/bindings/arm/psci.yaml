@@ -69,13 +69,11 @@ properties:
 
   method:
     description: The method of calling the PSCI firmware.
-    allOf:
-      - $ref: /schemas/types.yaml#/definitions/string-array
-      - enum:
-          # SMC #0, with the register assignments specified in this binding.
-          - smc
-          # HVC #0, with the register assignments specified in this binding.
-          - hvc
+    $ref: /schemas/types.yaml#/definitions/string-array
+    enum:
+      - smc
+      # HVC #0, with the register assignments specified in this binding.
+      - hvc
 
   cpu_suspend:
     $ref: /schemas/types.yaml#/definitions/uint32
@@ -103,12 +101,12 @@ properties:
       bindings in [1]) must specify this property.
 
       [1] Kernel documentation - ARM idle states bindings
-        Documentation/devicetree/bindings/arm/idle-states.yaml
+        Documentation/devicetree/bindings/cpu/idle-states.yaml
 
 patternProperties:
   "^power-domain-":
-    allOf:
-      - $ref: "../power/power-domain.yaml#"
+    $ref: "../power/power-domain.yaml#"
+
     type: object
     description: |
       ARM systems can have multiple cores, sometimes in an hierarchical

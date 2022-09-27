@@ -30,6 +30,8 @@ static unsigned long get_entry_num_slots(efi_memory_desc_t *md,
 
 	region_end = min(md->phys_addr + md->num_pages * EFI_PAGE_SIZE - 1,
 			 (u64)ULONG_MAX);
+	if (region_end < size)
+		return 0;
 
 	first_slot = round_up(md->phys_addr, align);
 	last_slot = round_down(region_end - size + 1, align);
@@ -54,6 +56,7 @@ efi_status_t efi_random_alloc(unsigned long size,
 			      unsigned long random_seed)
 {
 	unsigned long map_size, desc_size, total_slots = 0, target_slot;
+	unsigned long total_mirrored_slots = 0;
 	unsigned long buff_size;
 	efi_status_t status;
 	efi_memory_desc_t *memory_map;
@@ -74,6 +77,8 @@ efi_status_t efi_random_alloc(unsigned long size,
 	if (align < EFI_ALLOC_ALIGN)
 		align = EFI_ALLOC_ALIGN;
 
+	size = round_up(size, EFI_ALLOC_ALIGN);
+
 	/* count the suitable slots in each memory map entry */
 	for (map_offset = 0; map_offset < map_size; map_offset += desc_size) {
 		efi_memory_desc_t *md = (void *)memory_map + map_offset;
@@ -82,10 +87,16 @@ efi_status_t efi_random_alloc(unsigned long size,
 		slots = get_entry_num_slots(md, size, ilog2(align));
 		MD_NUM_SLOTS(md) = slots;
 		total_slots += slots;
+		if (md->attribute & EFI_MEMORY_MORE_RELIABLE)
+			total_mirrored_slots += slots;
 	}
 
+	/* consider only mirrored slots for randomization if any exist */
+	if (total_mirrored_slots > 0)
+		total_slots = total_mirrored_slots;
+
 	/* find a random number between 0 and total_slots */
-	target_slot = (total_slots * (u16)random_seed) >> 16;
+	target_slot = (total_slots * (u64)(random_seed & U32_MAX)) >> 32;
 
 	/*
 	 * target_slot is now a value in the range [0, total_slots), and so
@@ -103,13 +114,17 @@ efi_status_t efi_random_alloc(unsigned long size,
 		efi_physical_addr_t target;
 		unsigned long pages;
 
+		if (total_mirrored_slots > 0 &&
+		    !(md->attribute & EFI_MEMORY_MORE_RELIABLE))
+			continue;
+
 		if (target_slot >= MD_NUM_SLOTS(md)) {
 			target_slot -= MD_NUM_SLOTS(md);
 			continue;
 		}
 
 		target = round_up(md->phys_addr, align) + target_slot * align;
-		pages = round_up(size, EFI_PAGE_SIZE) / EFI_PAGE_SIZE;
+		pages = size / EFI_PAGE_SIZE;
 
 		status = efi_bs_call(allocate_pages, EFI_ALLOCATE_ADDRESS,
 				     EFI_LOADER_DATA, pages, &target);
